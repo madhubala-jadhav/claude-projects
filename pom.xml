@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.example</groupId>
+    <artifactId>ExpenseInNutshell</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+    <properties>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- Slice 1 dependency versions (ADR-0015, ADR-0019, ADR-0020) -->
+        <commons-csv.version>1.12.0</commons-csv.version>
+        <!-- Slice 3 dependency versions (ADR-0015 Excel, ADR-0016 PDF text) -->
+        <poi.version>5.3.0</poi.version>
+        <pdfbox.version>3.0.3</pdfbox.version>
+        <jackson.version>2.17.2</jackson.version>
+        <pebble.version>3.2.2</pebble.version>
+        <junit-jupiter.version>5.10.3</junit-jupiter.version>
+
+        <maven-shade-plugin.version>3.6.0</maven-shade-plugin.version>
+        <maven-surefire-plugin.version>3.3.1</maven-surefire-plugin.version>
+        <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
+
+        <!-- Fixed clock reference used by a couple of tests; not a runtime dependency -->
+        <mainClass>org.example.cli.Main</mainClass>
+    </properties>
+
+    <dependencies>
+        <!-- ADR-0015: CSV parsing -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-csv</artifactId>
+            <version>${commons-csv.version}</version>
+        </dependency>
+
+        <!-- ADR-0015: Excel (.xlsx) parsing. Legacy BIFF .xls stays unsupported by
+             design - 05-traceability.md records it as FR1's documented partial. -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>${poi.version}</version>
+        </dependency>
+
+        <!-- ADR-0016: PDF text extraction with word bounding boxes. tess4j (the OCR half
+             of ADR-0016) is deliberately absent - PdfOcrParser is Slice 7. -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>${pdfbox.version}</version>
+        </dependency>
+
+        <!-- ADR-0020: Jackson object binding, reused for YAML config (ADR-0020) -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-yaml</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+        <!-- corrections.json stores ISO-8601 timestamps (02-data-model.md §3.5); without this
+             module Jackson writes a LocalDateTime as an array of integers. -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+
+        <!-- ADR-0019: report templating -->
+        <dependency>
+            <groupId>io.pebbletemplates</groupId>
+            <artifactId>pebble</artifactId>
+            <version>${pebble.version}</version>
+        </dependency>
+
+        <!-- Test -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit-jupiter.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <!-- ADR-0007: "Design tokens flow from tokens.json -> CSS custom properties ->
+                 both the report and the Figma plugin, so the report and the design file
+                 cannot drift." The design package's own token file is therefore packaged as
+                 the single source of truth rather than copied into src/main/resources, where
+                 the copy would be free to drift from the original. -->
+            <resource>
+                <directory>design/design-system</directory>
+                <targetPath>design</targetPath>
+                <includes>
+                    <include>tokens.json</include>
+                </includes>
+            </resource>
+        </resources>
+        <plugins>
+            <!-- ADR-0020: Jackson record binding needs -parameters, or every record
+                 needs @JsonCreator/@JsonProperty on its constructor by hand. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven-compiler-plugin.version}</version>
+                <configuration>
+                    <parameters>true</parameters>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven-surefire-plugin.version}</version>
+            </plugin>
+
+            <!-- ADR-0017: one fat JAR, launched by run.bat/run.command/run.sh via
+                 `java -jar ExpenseInNutshell.jar`. Dropped at the repo root, next to
+                 the launcher scripts, matching ADR-0017's tree diagram. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>${maven-shade-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <finalName>ExpenseInNutshell</finalName>
+                            <outputDirectory>${project.basedir}</outputDirectory>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>${mainClass}</mainClass>
+                                </transformer>
+                            </transformers>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

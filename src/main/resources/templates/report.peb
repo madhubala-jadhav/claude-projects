@@ -1,0 +1,313 @@
+{#
+  S01 — Monthly Dashboard. Section numbering below matches design/screens/01-monthly-dashboard.md.
+
+  Two sections render their documented "unavailable" state rather than being omitted, because
+  the data behind them belongs to a later slice: the month-over-month strip (FR14, Slice 6) and
+  the transfers note (FR11, Slice 7). S01 defines both states, so this is the screen behaving as
+  specified on a first run, not a stub.
+
+  The corrections loop (S03) is live: a category select on every uncategorized row and every
+  drill-down row, optimistic recalculation, and the sticky tray.
+#}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Expense Summary — {{ monthLabel }}</title>
+<style>{{ css | raw }}</style>
+</head>
+<body>
+<div class="page">
+
+{% if transactionCount == 0 %}
+  {# EC5 / S07: a run that parsed nothing still produces a real report that says why. #}
+  <header class="report-head"><h1 class="t-h1">Expense Summary — {{ monthLabel }}</h1></header>
+  <section class="card empty">
+    <h2 class="t-h2">No transactions found</h2>
+    <p class="t-body-lg secondary">Nothing in <code>input/</code> could be read as a statement for this month.
+      {% if excludedFiles is empty %}The folder had no statement files in it.{% else %}Every file was skipped — the reasons are below.{% endif %}</p>
+  </section>
+{% else %}
+
+  {# 1. Header #}
+  <header class="report-head">
+    <div>
+      <h1 class="t-h1">Expense Summary — {{ monthLabel }}</h1>
+      <p class="t-caption">Generated {{ generatedAt }} · {{ transactionCount }} transaction{% if transactionCount != 1 %}s{% endif %} · {{ accountCount }} account{% if accountCount != 1 %}s{% endif %} · {{ currency }}</p>
+    </div>
+    <div class="head-actions">
+      <a class="btn" href="transactions.csv" download>Download CSV</a>
+      <div class="segmented" role="group" aria-label="Colour theme">
+        <button type="button" data-theme-option="auto" aria-pressed="true">Auto</button>
+        <button type="button" data-theme-option="light" aria-pressed="false">Light</button>
+        <button type="button" data-theme-option="dark" aria-pressed="false">Dark</button>
+      </div>
+    </div>
+  </header>
+
+  {# 2. Stat tiles (FR12) #}
+  <section class="tiles">
+    <div class="tile">
+      <span class="t-label">Total spend</span>
+      <span class="value num num-lg">{{ totalSpend }}</span>
+    </div>
+    <div class="tile">
+      <span class="t-label">Total income</span>
+      <span class="value num num-lg">{{ totalIncome }}</span>
+    </div>
+    <div class="tile{% if netPositive %} positive{% endif %}">
+      <span class="t-label">Net</span>
+      <span class="value num num-lg">{{ net }}</span>
+    </div>
+    {% if uncategorizedCount > 0 %}
+    <a class="tile warning" href="#uncategorized">
+      <span class="t-label">Uncategorized</span>
+      <span class="value num num-lg">{{ uncategorizedCount }} · {{ uncategorizedAmount }}</span>
+    </a>
+    {% else %}
+    <div class="tile clean">
+      <span class="t-label">Uncategorized</span>
+      <span class="value num num-lg">0 · All categorized</span>
+    </div>
+    {% endif %}
+  </section>
+  {% if hasTransfers %}
+  <p class="transfers-note">{{ transfersTotal }} in transfers between your own accounts was excluded from spend.</p>
+  {% endif %}
+  {% if needsReviewCount > 0 %}
+  <p class="transfers-note">{{ needsReviewCount }} transaction{% if needsReviewCount != 1 %}s{% endif %} need{% if needsReviewCount == 1 %}s{% endif %} review — check {% if uncategorizedCount > 0 %}the review list below{% else %}transactions.csv{% endif %}.</p>
+  {% endif %}
+
+  {# 3. Top-category callout (FR13 / AC3): stated as literal text, never implied by the chart #}
+  {% if hasTopCategory %}
+  <section class="callout">
+    <div>
+      <span class="t-label eyebrow">Your largest category</span>
+      <h2 class="t-h2">{{ topCategory.name }}: {{ topCategory.amount }} — {{ topCategory.percent }}% of your spend</h2>
+      <p class="t-body-lg">{{ calloutSupport }}</p>
+    </div>
+    <button type="button" class="btn" data-category="{{ topCategory.name }}">See the {{ topCategory.txnCount }} transaction{% if topCategory.txnCount != 1 %}s{% endif %}</button>
+  </section>
+  {% endif %}
+
+  {# 4. Chart + legend (FR17) #}
+  <section class="card">
+    <div class="section-head">
+      <h2 class="t-h3">Where your money went</h2>
+      <button type="button" class="btn" id="toggle-patterns" aria-pressed="false">Patterns</button>
+    </div>
+    <div class="chart-layout">
+      <div class="chart-holder">
+        {% if chartAvailable %}
+        <canvas id="spend-chart" height="640" aria-label="Pie chart of spend by category. Largest: {{ topCategoryName }}."></canvas>
+        {% else %}
+        {{ svgFallback | raw }}
+        <p class="chart-missing">The interactive chart asset is missing from this install, so a static chart was drawn instead ({{ chartWarningCode }}).</p>
+        {% endif %}
+      </div>
+      <ul class="legend">
+        {% for slice in slices %}
+        <li tabindex="0" data-category="{{ slice.name }}" title="{{ slice.txnCount }} transactions">
+          <span class="swatch" style="background:{% if slice.kind == 'uncategorized' %}repeating-linear-gradient(45deg, var(--chart-uncategorized-fill) 0 3px, var(--chart-uncategorized-hatch) 3px 5px){% else %}var({{ slice.fillVar }}){% endif %}"></span>
+          <span>{{ slice.name }}{% if slice.kind == 'uncategorized' %} <span class="badge uncategorized">gap</span>{% endif %}</span>
+          <span class="num num-md">{{ slice.amount }}</span>
+          <span class="pct">{{ slice.percent }}%</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </section>
+
+  {% if staleCorrections is not empty %}
+  <section class="card panel-warning">
+    <h2 class="t-h3">Saved corrections that no longer apply</h2>
+    <ul class="plain">
+      {% for note in staleCorrections %}<li>{{ note }}</li>{% endfor %}
+    </ul>
+    <p class="t-body-sm secondary">They are still in <code>config/corrections.json</code> — rename the
+      category back, or edit the file, and they will apply again.</p>
+  </section>
+  {% endif %}
+
+  {# 5. Category table (FR18) #}
+  <section class="card">
+    <div class="section-head">
+      <h2 class="t-h3">Spend by category</h2>
+      <span class="t-caption">Sorted by amount. Percentages are apportioned to sum to exactly 100.0%.</span>
+    </div>
+    <div class="scroll-x">
+    <table>
+      <thead>
+        <tr><th>Category</th><th class="right">Txns</th><th class="right">Amount</th><th class="right">% of spend</th><th>vs last month</th></tr>
+      </thead>
+      <tbody>
+        {% for row in byCategory %}
+        <tr class="row-clickable{% if row.isTop %} is-top{% endif %}{% if row.isUncategorized %} is-uncategorized{% endif %}{% if row.isZero %} is-zero{% endif %}"
+            data-category="{{ row.name }}" tabindex="0"{% if row.slotVar %} style="--slot-top: var({{ row.slotVar }})"{% endif %}>
+          <td>{{ row.name }}{% if row.isUncategorized %} <span class="badge uncategorized">needs a rule</span>{% endif %}</td>
+          <td class="right num">{{ row.txnCount }}</td>
+          <td class="right num amount">{{ row.amount }}</td>
+          <td class="right num">{{ row.percent }}%</td>
+          <td><span class="delta" title="{{ momTitle }}">—</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr><td>Total</td><td class="right num">{{ transactionCount }}</td><td class="right num">{{ totalSpend }}</td><td class="right num">100.0%</td><td>—</td></tr>
+      </tfoot>
+    </table>
+    </div>
+  </section>
+
+  {# 6. Month-over-month — S01's documented "no prior month" state until FR14 lands #}
+  <section class="card">
+    <h2 class="t-h3">Compared with last month</h2>
+    <p class="secondary" style="margin:8px 0 0">{{ momTitle }}</p>
+  </section>
+
+  {# 7. Top 5 transactions (FR15) #}
+  <section class="card">
+    <h2 class="t-h3">Largest transactions</h2>
+    <div class="scroll-x">
+    <table>
+      <thead><tr><th>Date</th><th>Description</th><th>Category</th><th class="right">Amount</th></tr></thead>
+      <tbody>
+        {% for txn in topTransactions %}
+        <tr class="row-clickable" data-category="{{ txn.category }}" tabindex="0">
+          <td class="num">{{ txn.date }}</td>
+          <td>{{ txn.description }}</td>
+          <td>{{ txn.category }}</td>
+          <td class="right num amount">{{ txn.amount }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  {# 8. Uncategorized review (NFR6 / AC5) #}
+  {% if uncategorizedCount > 0 %}
+  <section class="card" id="uncategorized">
+    <div class="section-head">
+      <h2 class="t-h3">Uncategorized — {{ uncategorizedCount }} transaction{% if uncategorizedCount != 1 %}s{% endif %}, {{ uncategorizedAmount }}</h2>
+      <span class="t-caption">Add a keyword to config/categories.yaml to claim these.</span>
+    </div>
+    <div class="scroll-x">
+    <table>
+      <thead><tr><th>Date</th><th>Description</th><th class="right">Amount</th>{% if canCorrect %}<th>Category</th>{% endif %}</tr></thead>
+      <tbody>
+        {% for txn in uncategorizedRows %}
+        <tr data-txn="{{ txn.id }}" data-merchant-key="{{ txn.merchantKey }}">
+          <td class="num">{{ txn.date }}</td>
+          <td>
+            {{ txn.description }}
+            <div class="t-caption">{{ txn.rawDescription }} · {{ txn.sourceFile }}</div>
+            <div class="merchant-key t-caption">remembered as: <code>{{ txn.merchantKey }}</code></div>
+          </td>
+          <td class="right num amount">{{ txn.amount }}</td>
+          {% if canCorrect %}
+          <td>
+            <select class="category-select" data-txn="{{ txn.id }}"
+                    aria-label="Category for {{ txn.description }}">
+              {% for option in categoryOptions %}
+              <option value="{{ option.name }}"{% if option.name == 'Uncategorized' %} selected{% endif %}>{{ option.name }}</option>
+              {% endfor %}
+            </select>
+            <div class="scope-choice">
+              <label><input type="radio" name="scope-{{ txn.id }}" value="merchant" checked> every future <code>{{ txn.merchantKey }}</code></label>
+              <label><input type="radio" name="scope-{{ txn.id }}" value="transaction"> only this one</label>
+            </div>
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+  {% endif %}
+
+  {# 9. Sources, and skipped files (AC7) #}
+  <section class="card">
+    <h2 class="t-h3">Sources</h2>
+    <div class="scroll-x">
+    <table>
+      <thead><tr><th>Account</th><th>File</th><th class="right">Txns</th><th class="right">Spend</th></tr></thead>
+      <tbody>
+        {% for account in accounts %}
+        <tr><td>{{ account.account }}</td><td>{{ account.file }}</td><td class="right num">{{ account.txnCount }}</td><td class="right num amount">{{ account.spend }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+{% endif %}
+
+  {% if excludedFiles is not empty %}
+  <section class="card panel-danger">
+    <h2 class="t-h3">Files that were skipped ({{ excludedFiles | length }})</h2>
+    <div class="scroll-x">
+    <table>
+      <thead><tr><th>File</th><th>Reason</th></tr></thead>
+      <tbody>
+        {% for file in excludedFiles %}
+        <tr><td>{{ file.file }}</td><td>{{ file.reason }}{% if file.detail %} <span class="muted">({{ file.detail }})</span>{% endif %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+  {% endif %}
+
+  {# 10. Footer #}
+  <footer>
+    <p class="t-caption">Generated locally by ExpenseInNutshell v{{ version }} on {{ generatedAt }}. No data left this machine.</p>
+    <div class="links t-caption">
+      <a href="transactions.csv">transactions.csv</a>
+      <a href="run-log.txt">run-log.txt</a>
+    </div>
+  </footer>
+</div>
+
+{# FR20 / S03: sticky corrections tray. Hidden at zero pending changes - S01 is explicit that
+   the save button is never rendered as an enabled control that does nothing. #}
+<aside class="tray" id="tray" hidden aria-live="polite">
+  <div>
+    <strong class="t-h3" id="tray-count"></strong>
+    <div class="t-body-sm secondary" id="tray-summary"></div>
+  </div>
+  <div class="tray-actions">
+    <button type="button" class="btn" id="tray-discard">Discard</button>
+    <button type="button" class="btn btn-primary" id="tray-save">Save corrections</button>
+  </div>
+</aside>
+
+<aside class="tray tray-saved" id="tray-saved" hidden>
+  <div>
+    <strong class="t-h3" id="saved-headline"></strong>
+    <div class="t-body-sm" id="saved-detail"></div>
+    <code class="drop-path" id="saved-path">{{ inputPath }}</code>
+  </div>
+  <div class="tray-actions">
+    <button type="button" class="btn" id="saved-copy">Copy path</button>
+    <button type="button" class="btn" id="saved-dismiss">Done</button>
+  </div>
+</aside>
+
+{# FR19 drill-down. Hidden until a slice, legend entry or table row is activated. #}
+<aside class="drill" id="drill" aria-hidden="true" aria-labelledby="drill-title">
+  <div class="drill-head">
+    <div>
+      <h2 class="t-h3" id="drill-title"></h2>
+      <p class="t-caption" id="drill-meta"></p>
+    </div>
+    <button type="button" class="btn" id="drill-close" aria-label="Close">Close</button>
+  </div>
+  <ol id="drill-list"></ol>
+</aside>
+
+<script type="application/json" id="expense-data">{{ dataIsland | raw }}</script>
+{% if chartAvailable %}<script>{{ chartJs | raw }}</script>{% endif %}
+<script>{{ js | raw }}</script>
+</body>
+</html>

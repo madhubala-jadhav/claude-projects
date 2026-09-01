@@ -1,0 +1,70 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+*.class
+
+# Maven-shade fat JAR (ADR-0017): built by the maintainer via `mvn package`,
+# published per release — not committed source.
+/ExpenseInNutshell.jar
+/original-ExpenseInNutshell.jar
+/ExpenseInNutshell-*-shaded.jar
+/dependency-reduced-pom.xml
+
+### IntelliJ IDEA ###
+.idea/
+.idea/modules.xml
+.idea/jarRepositories.xml
+.idea/compiler.xml
+.idea/libraries/
+*.iws
+*.iml
+*.ipr
+
+### Eclipse ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+### Mac OS ###
+.DS_Store
+
+### ExpenseInNutshell runtime workspace ###
+# config/, input/, output/ and archive/ hold or will hold the user's real
+# financial data (statements, generated reports, learned merchant corrections).
+# None of it is ever committed - only the shipped defaults under
+# src/main/resources/default-config/ are source. Directory shape is kept via
+# .gitkeep so a fresh checkout still has the four folders the launchers expect.
+/config/*.yaml
+/config/corrections.json
+/input/*
+!/input/.gitkeep
+/output/*
+!/output/.gitkeep
+/archive/*
+!/archive/.gitkeep
+
+# Conversation exports written into the repo root by `/export`. These transcripts quote
+# whatever was being worked on, which for this project includes real statement contents -
+# same reason input/ and output/ are ignored (§13).
+/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-*.txt
+
+# The Figma file key: an identifier for the owner's design file, not source.
+/design/.figma-file-key

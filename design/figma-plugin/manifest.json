@@ -1,0 +1,14 @@
+{
+  "name": "ExpenseInNutshell — Design Generator",
+  "id": "expense-in-nutshell-design-generator",
+  "api": "1.0.0",
+  "editorType": ["figma"],
+  "main": "code.js",
+  "capabilities": [],
+  "enableProposedApi": false,
+  "permissions": [],
+  "networkAccess": {
+    "allowedDomains": ["none"],
+    "reasoning": "This plugin makes no network requests. The product it designs is offline-only by requirement (NFR1/AC8), and the generator holds itself to the same rule."
+  }
+}

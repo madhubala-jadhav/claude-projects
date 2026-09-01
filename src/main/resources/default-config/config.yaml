@@ -1,0 +1,39 @@
+schema_version: 1
+
+paths:
+  input: ./input
+  output: ./output
+  archive: ./archive
+
+currency:
+  default: INR
+  locale: en-IN
+
+dedupe:                                   # FR6, EC1
+  key: [date, description_normalized, amount, direction]
+  cross_file_only: true                   # same key within ONE file = a real repeat charge
+  window_days: 0
+
+transfers:                                # FR11, OQ3 - not yet read (Slice 7)
+  detect_pairs: true
+  window_days: 3
+  amount_tolerance: 0.00
+
+ocr:                                      # FR3 - not yet read (Slice 7)
+  enabled: true
+  language: eng
+  dpi: 300
+  confidence_threshold: 0.75
+  tesseract_path: null
+
+report:                                   # FR16, FR17
+  open_browser: true
+  theme: auto
+  top_n_slices: 8
+  min_slice_percent: 1.0
+  show_transfers_panel: true
+  keep_reruns: false
+
+logging:
+  level: INFO
+  redact_account_numbers: true

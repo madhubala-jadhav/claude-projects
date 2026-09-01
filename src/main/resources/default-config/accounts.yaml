@@ -1,0 +1,8 @@
+schema_version: 1
+
+# FR11/OQ3 - not yet read (Slice 7). Written because F8 requires all four config files to
+# exist; empty until the user (or a later slice's flow) populates it.
+accounts: []
+income_rules:
+  salary_keywords: ["salary", "sal cr", "payroll"]
+  treat_unmatched_credit_from_own_account_as: transfer

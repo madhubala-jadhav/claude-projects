@@ -1,0 +1,65 @@
+schema_version: 1
+
+# ---------------------------------------------------------------------------
+# Your bank profiles.
+#
+# This file is an OVERLAY. The tool already knows a set of built-in profiles that ship with it
+# and stay current as you upgrade — you do not need to copy them here, and copying them here is
+# actively harmful: a copy shadows the built-in, so an improved profile in a later release would
+# never reach you.
+#
+# Use this file for two things:
+#   1. banks the built-ins do not cover yet, and
+#   2. changes to a built-in that you want to keep.
+#
+# Run the tool with `--verbose` (or read output/<month>/run-log.txt) to see which profiles were
+# loaded and which of them, if any, this file is overriding.
+# ---------------------------------------------------------------------------
+
+
+# ---- 1. Adding a bank ------------------------------------------------------
+#
+# Drop a statement in input/ and run the tool. If no profile matches, it asks you to map the
+# columns once and appends the answer to the bottom of this file (spec §11.2) — so for CSV and
+# Excel you rarely need to write one by hand.
+#
+# To write one yourself, uncomment and edit:
+#
+# profiles:
+#   - name: mybank_savings_csv
+#     applies_to: [csv, xlsx]          # or [pdf]
+#     match:
+#       headers_any: ["Txn Date", "Particulars", "Debit", "Credit"]
+#       filename_contains: ["mybank"]  # optional secondary hint
+#     columns:
+#       date: "Txn Date"
+#       description: "Particulars"
+#       debit: "Debit"                 # money out
+#       credit: "Credit"               # money in
+#       balance: "Balance"             # optional
+#     date_order: DMY                  # DMY | MDY | YMD — never guessed, always declared
+#     date_formats: ["dd/MM/yyyy", "dd-MM-yyyy"]
+#     decimal_separator: "."
+#     thousands_separator: ","
+#     amount_sign: separate_columns    # separate_columns | debit_negative | dr_cr_suffix
+#     skip_rows_matching: ["Opening Balance", "STATEMENT SUMMARY"]
+#
+# For a statement with ONE amount column instead of separate debit/credit columns, use
+# `amount: "Amount"` in `columns`, and either `amount_sign: debit_negative` (money out is
+# negative) or `amount_sign: dr_cr_suffix` with `credit_markers: ["Cr"]` naming whatever marks
+# a money-in row — some statements use "+", some "Cr".
+
+
+# ---- 2. Changing a built-in ------------------------------------------------
+#
+# Define a profile with the SAME `name` as a built-in and yours replaces it entirely. The run
+# log will tell you it is being overridden, so a copy you forgot about cannot quietly hold you
+# on an old version.
+
+
+# ---- 3. Switching a built-in off -------------------------------------------
+#
+# Deleting a built-in from this file does nothing — it was never here. To suppress one, name it:
+#
+# disable_shipped_profiles:
+#   - generic_pdf_indian_savings

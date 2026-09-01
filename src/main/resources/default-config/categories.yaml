@@ -1,0 +1,46 @@
+schema_version: 1
+
+categories:
+  Rent/Housing:
+    slot: 1
+    keywords: ["rent", "landlord", "society maintenance", "brokerage"]
+  Food & Dining:
+    slot: 2
+    keywords: ["swiggy", "zomato", "restaurant", "cafe", "dominos", "starbucks"]
+  Groceries:
+    slot: 3
+    keywords: ["bigbasket", "dmart", "grocery", "blinkit", "zepto", "reliance fresh"]
+  Transport:
+    slot: 4
+    keywords: ["uber", "ola", "irctc", "fuel", "petrol", "rapido", "metro"]
+    patterns: ["FASTAG\\s*RECHARGE"]
+  Shopping:
+    slot: 5
+    keywords: ["myntra", "flipkart", "croma", "decathlon", "nykaa"]
+  Utilities:
+    slot: 6
+    keywords: ["bescom", "electricity", "airtel", "jio", "broadband", "gas", "water"]
+  EMI/Loan Payments:
+    slot: 7
+    keywords: ["emi", "loan", "hdfc ergo emi"]
+    patterns: ["ACH\\s*D[Rr].*LOAN"]
+  Healthcare:
+    slot: 8
+    keywords: ["apollo", "pharmacy", "hospital", "clinic", "practo", "1mg"]
+  Entertainment:
+    slot: null
+    keywords: ["netflix", "spotify", "bookmyshow", "hotstar", "prime video"]
+  Investments/Savings:
+    slot: null
+    keywords: ["zerodha", "groww", "sip", "mutual fund", "recurring deposit"]
+  Transfers/Self:
+    slot: null
+    is_transfer: true
+    keywords: ["self transfer", "own account", "credit card payment", "cc bill"]
+  Uncategorized:
+    slot: null
+    keywords: []
+
+overrides:                                # L3, not yet read this slice (Slice 5)
+  "amazon pay": "Shopping"
+  "amazon": "Shopping"

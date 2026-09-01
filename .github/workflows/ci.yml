@@ -1,0 +1,70 @@
+# NFR4 — "runs on Windows, macOS and Linux".
+#
+# The roadmap put this matrix in slice 1 with the note that "NFR4 is not verifiable
+# retroactively": a cross-platform claim is only worth what the last green run proves, and a
+# path separator or a default charset that broke three slices ago is far more expensive to find
+# than one caught the day it landed. It is late; it is here now.
+#
+# `mvn verify` also runs the AC8 static checks (PrivacyStaticCheckTest's import lint,
+# ReportRendererTest's no-external-references assertion, ExternalEntityTest's XXE check), which
+# the roadmap likewise wanted enforced by CI rather than audited afterwards.
+
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Every OS reports, rather than the first failure cancelling the rest: "it broke on
+      # Windows only" and "it broke everywhere" call for completely different investigations.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          # ADR-0014 fixes the runtime at Java 17; the build must not silently pass on a newer
+          # JDK that the target machines do not have.
+          java-version: '17'
+          distribution: temurin
+          cache: maven
+
+      - name: Build and test
+        run: mvn -B --no-transfer-progress verify
+
+      - name: Verify the packaged jar actually runs
+        # `mvn verify` proves the tests pass; this proves the shaded artifact the user is
+        # handed starts, finds an empty input folder, and still writes a report (EC5).
+        shell: bash
+        run: |
+          mkdir -p smoke/input smoke/config smoke/output
+          java -jar ExpenseInNutshell.jar \
+            --config smoke/config --input smoke/input --output smoke/output --no-open
+          ls smoke/output/*/report.html || { echo "no report was produced"; exit 1; }
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-${{ matrix.os }}
+          path: target/surefire-reports/
+          retention-days: 7

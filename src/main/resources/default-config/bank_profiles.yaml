@@ -1,0 +1,180 @@
+schema_version: 1
+
+# 02-data-model.md §3.3. A profile tells the parser which columns mean what; adding a bank is
+# a config change, never a code change (spec §11.1/§11.2).
+#
+# date_formats uses java.time.format.DateTimeFormatter pattern syntax (e.g. "dd/MM/yy") rather
+# than 02-data-model.md's Python-strptime-style examples ("%d/%m/%y") - an implementation-
+# language adaptation of the same documented format, per ADR-0014.
+#
+# WHICH PROFILES SHIP ENABLED. The Slice 3 rule is that a bank-specific profile is enabled only
+# once it has been validated against a real export of that bank's statement; anything unverified
+# ships commented out, because a profile that half-matches produces confidently wrong numbers -
+# strictly worse than an honest "no matching bank profile" (PARSE-204). Uncomment one only after
+# checking it against your own statement.
+#
+# NOTE FOR HAND-EDITORS: keep `profiles:` as the last top-level key. The one-time column mapper
+# (spec §11.2) appends new profiles to the end of this file, and reloads the file afterwards to
+# check its own work - it restores the previous content if the append does not parse.
+
+profiles:
+
+  # --- Validated ------------------------------------------------------------------------
+
+  # HDFC Regalia credit-card statement, PDF. Validated against a real August 2026 export:
+  # 7 transactions across 2 pages, debits totalling the statement's own printed
+  # "PURCHASES/DEBIT" figure to the paisa, and the single payment row correctly read as a
+  # credit rather than as spend.
+  #
+  # Two things about this layout are worth knowing before editing it. The table is printed at a
+  # different x-offset on page 1 (beside the card-art block) than on page 2, which is why column
+  # geometry is derived per page from the header row and never configured here. And the amount
+  # column marks money-in with a leading "+" instead of the more usual trailing "Cr" - hence
+  # credit_markers below, which is what amount_sign: dr_cr_suffix consults.
+  - name: hdfc_credit_card_pdf
+    applies_to: [pdf]
+    match:
+      headers_any: ["DATE & TIME", "TRANSACTION DESCRIPTION", "AMOUNT"]
+      filename_contains: ["hdfc"]
+    columns:
+      date: "DATE & TIME"
+      description: "TRANSACTION DESCRIPTION"
+      amount: "AMOUNT"
+    date_order: DMY
+    date_formats: ["dd/MM/yyyy"]
+    decimal_separator: "."
+    thousands_separator: ","
+    amount_sign: dr_cr_suffix
+    credit_markers: ["+"]
+    account_number_regex: "Credit Card No\\.?\\s*([0-9Xx]{6,})"
+    skip_rows_matching: []
+    pdf_table:
+      strategy: lines
+      x_tolerance: 2
+      y_tolerance: 1.5
+      header_row_contains: ["DATE & TIME", "AMOUNT"]
+      drop_header_rows_after_first_page: true
+      crop_top_pct: 0.0
+      # Only the page footer is cropped. A 6% bottom crop - the §3.3 example value - would eat
+      # the last transaction row on page 1 of this statement.
+      crop_bottom_pct: 0.01
+
+  # HDFC savings-account CSV export. Shipped since Slice 1 and exercised by
+  # src/test/resources/fixtures/hdfc_savings_sample.csv - which is a *fabricated* fixture built
+  # to HDFC's published column names, not a real export. Treat the column names as verified and
+  # the rest as plausible until a real savings CSV confirms it.
+  - name: hdfc_savings_csv
+    applies_to: [csv, xlsx]
+    match:
+      headers_any: ["Narration", "Withdrawal Amt.", "Deposit Amt.", "Chq./Ref.No."]
+      filename_contains: ["hdfc"]
+    columns:
+      date: "Date"
+      description: "Narration"
+      debit: "Withdrawal Amt."
+      credit: "Deposit Amt."
+      balance: "Closing Balance"
+      reference: "Chq./Ref.No."
+    date_order: DMY
+    date_formats: ["dd/MM/yy", "dd/MM/yyyy"]
+    decimal_separator: "."
+    thousands_separator: ","
+    amount_sign: separate_columns
+    account_number_regex: "Account No\\s*[:\\-]\\s*(\\d{6,})"
+    skip_rows_matching: ["^\\s*$", "Opening Balance", "STATEMENT SUMMARY"]
+
+  # The day-one generic PDF template (ADR-0011, spec §11.1: "Support common Indian bank
+  # statement table layouts ... as the default template"). It is not a bank-specific seed
+  # profile, so it ships enabled as the fallback for any savings-account PDF whose header row
+  # reads Date / Narration / Withdrawal / Deposit / Balance. It has not yet been checked against
+  # a real savings-account PDF; the first one to arrive should be diffed against it by hand.
+  - name: generic_pdf_indian_savings
+    applies_to: [pdf]
+    match:
+      headers_any: ["Date", "Narration", "Withdrawal", "Deposit", "Balance"]
+    columns:
+      date: "Date"
+      description: "Narration"
+      debit: "Withdrawal"
+      credit: "Deposit"
+      balance: "Balance"
+    date_order: DMY
+    date_formats: ["dd/MM/yyyy", "dd-MM-yyyy", "dd MMM yyyy"]
+    decimal_separator: "."
+    thousands_separator: ","
+    amount_sign: separate_columns
+    skip_rows_matching: ["Opening Balance", "STATEMENT SUMMARY", "Closing Balance"]
+    pdf_table:
+      strategy: lines
+      x_tolerance: 2
+      y_tolerance: 1.5
+      header_row_contains: ["Date", "Balance"]
+      drop_header_rows_after_first_page: true
+      crop_top_pct: 0.0
+      crop_bottom_pct: 0.06
+
+  # --- Not yet validated: uncomment after checking against a real export --------------------
+  #
+  # These are 02-data-model.md §3.3's and ADR-0011's seed layouts for the remaining day-one
+  # banks. The column names come from each bank's published export format, but none has been
+  # run against a real statement, so they stay commented out per the Slice 3 rule above.
+  #
+  # - name: icici_savings_csv
+  #   applies_to: [csv, xlsx]
+  #   match:
+  #     headers_any: ["Transaction Date", "Transaction Remarks", "Withdrawal Amount (INR )"]
+  #     filename_contains: ["icici", "optransactionhistory"]
+  #   columns:
+  #     date: "Transaction Date"
+  #     description: "Transaction Remarks"
+  #     debit: "Withdrawal Amount (INR )"
+  #     credit: "Deposit Amount (INR )"
+  #     balance: "Balance (INR )"
+  #   date_order: DMY
+  #   date_formats: ["dd/MM/yyyy"]
+  #   amount_sign: separate_columns
+  #
+  # - name: sbi_savings_csv
+  #   applies_to: [csv, xlsx]
+  #   match:
+  #     headers_any: ["Txn Date", "Description", "Debit", "Credit", "Balance"]
+  #     filename_contains: ["sbi"]
+  #   columns:
+  #     date: "Txn Date"
+  #     description: "Description"
+  #     debit: "Debit"
+  #     credit: "Credit"
+  #     balance: "Balance"
+  #   date_order: DMY
+  #   date_formats: ["dd MMM yyyy", "dd/MM/yyyy"]
+  #   amount_sign: separate_columns
+  #
+  # - name: axis_savings_csv
+  #   applies_to: [csv, xlsx]
+  #   match:
+  #     headers_any: ["Tran Date", "PARTICULARS", "DR", "CR", "BAL"]
+  #     filename_contains: ["axis"]
+  #   columns:
+  #     date: "Tran Date"
+  #     description: "PARTICULARS"
+  #     debit: "DR"
+  #     credit: "CR"
+  #     balance: "BAL"
+  #   date_order: DMY
+  #   date_formats: ["dd-MM-yyyy", "dd/MM/yyyy"]
+  #   amount_sign: separate_columns
+  #
+  # - name: kotak_savings_csv
+  #   applies_to: [csv, xlsx]
+  #   match:
+  #     headers_any: ["Transaction Date", "Description", "Withdrawal (Dr)", "Deposit (Cr)"]
+  #     filename_contains: ["kotak"]
+  #   columns:
+  #     date: "Transaction Date"
+  #     description: "Description"
+  #     debit: "Withdrawal (Dr)"
+  #     credit: "Deposit (Cr)"
+  #     balance: "Balance"
+  #   date_order: DMY
+  #   date_formats: ["dd-MM-yyyy", "dd/MM/yyyy"]
+  #   amount_sign: separate_columns
