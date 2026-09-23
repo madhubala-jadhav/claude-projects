@@ -48,8 +48,18 @@ jobs:
           distribution: temurin
           cache: maven
 
+      - name: Install the Playwright browser
+        # The browser-level report tests (src/test/java/org/example/report/e2e) skip themselves
+        # when no browser is present, so that a developer without one is not blocked. That would
+        # let CI go quietly green while the whole browser half went unrun, which is why the
+        # browser is installed here and -De2e.strict below turns the skip back into a failure.
+        run: mvn -B --no-transfer-progress compile exec:java -e
+          -Dexec.mainClass=com.microsoft.playwright.CLI
+          -Dexec.classpathScope=test
+          -Dexec.args="install --with-deps chromium"
+
       - name: Build and test
-        run: mvn -B --no-transfer-progress verify
+        run: mvn -B --no-transfer-progress verify -De2e.strict=true
 
       - name: Verify the packaged jar actually runs
         # `mvn verify` proves the tests pass; this proves the shaded artifact the user is

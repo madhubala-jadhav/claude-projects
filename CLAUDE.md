@@ -38,9 +38,10 @@ transfer rules, etc.) — none of these block implementation, they refine later 
 
 ## Implementation status
 
-**Slices 1-5 are done, CI is up, and config upgrades itself.** 147 tests, all passing
-on Windows/macOS/Linux
-(1 skipped: a permission-denied fault injection that cannot be forced on every platform).
+**Slices 1-5 are done, CI is up, and config upgrades itself.** 199 tests, all passing
+on Windows/macOS/Linux (2 skipped: a permission-denied fault injection that cannot be forced
+on every platform, and `theChartFillsTheSpaceTheDesignAllotsIt_S01`, whose `@Disabled` reason
+carries the diagnosis of a known chart-sizing defect).
 
 - **Slice 1 - walking skeleton** (`1422adb`): CSV in, HTML report out. FR1 (CSV), FR4, FR7,
   FR8, FR10, FR12, FR16, FR22, FR23 (partial), NFR1, NFR4, **AC8**.
@@ -202,7 +203,9 @@ src/main/resources/
                     is the thin file a fresh workspace actually gets
   templates/      — report.peb (S01 layout), report.css, report.js — all three inlined
   assets/         — chart.umd.js (vendored Chart.js v4.4.4, MIT) + its licence
-src/test/java/org/example/...  — mirrors the main package layout, 26 test classes
+src/test/java/org/example/...  — mirrors the main package layout, 30 test classes
+                                 (report/e2e/ drives the rendered report in real Chromium via
+                                 Playwright; it skips itself where no browser is installed)
 src/test/resources/fixtures/   — fabricated CSV fixture. PDF fixtures are generated at test
                                  time by parse/PdfFixtures.java, never checked in (§13)
 ```
